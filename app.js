@@ -41,15 +41,24 @@ wss.on('connection', (clientSocket, request) => {
         // Client → OpenAI
         clientSocket.on('message', (data) => {
             try {
+                const message = JSON.parse(data.toString());
+                console.log('📤 Client → OpenAI:', message.type);
+
+                // Debug: log audio size
+                if (message.type === "input_audio_buffer.append") {
+                    console.log(`🎵 Sending audio chunk: ${message.audio.length} base64 chars`);
+                }
+
                 if (openaiSocket && openaiSocket.readyState === WebSocket.OPEN) {
                     openaiSocket.send(data);
                 } else {
-                    console.log('⚠️ OpenAI socket not ready, message dropped');
+                    console.log('⚠️ OpenAI socket not ready, message queued');
                 }
             } catch (error) {
                 console.error('❌ Error forwarding client message:', error);
             }
         });
+
 
         // OpenAI → Client
         openaiSocket.on('message', (data) => {
