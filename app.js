@@ -3,9 +3,10 @@ const WebSocket = require('ws');
 const http = require('http');
 const dotenv = require('dotenv');
 dotenv.config()
-// Replace with your actual OpenAI API key
+
 const OPENAI_API_KEY = process.env.TOKEN;
-const OPENAI_REALTIME_URL = 'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01';
+const OPENAI_REALTIME_URL =
+    'wss://api.openai.com/v1/realtime?model=gpt-4o-realtime-preview-2024-10-01';
 
 // Create HTTP server
 const server = http.createServer();
@@ -19,12 +20,11 @@ const wss = new WebSocket.Server({
 console.log('🚀 Starting OpenAI Realtime Proxy Server...');
 
 wss.on('connection', (clientSocket, request) => {
-    console.log('📱 Client connected from:', request.connection.remoteAddress);
+    console.log('📱 Client connected from:', request.socket.remoteAddress);
 
     let openaiSocket = null;
 
     try {
-        // Connect to OpenAI with proper authentication
         console.log('🔌 Connecting to OpenAI Realtime API...');
 
         openaiSocket = new WebSocket(OPENAI_REALTIME_URL, {
@@ -34,50 +34,40 @@ wss.on('connection', (clientSocket, request) => {
             }
         });
 
-        // OpenAI connection opened
         openaiSocket.on('open', () => {
             console.log('✅ Connected to OpenAI Realtime API');
         });
 
-        // Forward messages from client to OpenAI
+        // Client → OpenAI
         clientSocket.on('message', (data) => {
             try {
-                const message = JSON.parse(data.toString());
-                console.log('📤 Client → OpenAI:', message.type);
-
                 if (openaiSocket && openaiSocket.readyState === WebSocket.OPEN) {
                     openaiSocket.send(data);
                 } else {
-                    console.log('⚠️ OpenAI socket not ready, message queued');
+                    console.log('⚠️ OpenAI socket not ready, message dropped');
                 }
             } catch (error) {
                 console.error('❌ Error forwarding client message:', error);
             }
         });
 
-        // Forward messages from OpenAI to client
+        // OpenAI → Client
         openaiSocket.on('message', (data) => {
             try {
-                // Ensure we're sending valid JSON string
                 const message = JSON.parse(data.toString());
                 console.log('📥 OpenAI → Client:', message.type);
-
-                if (clientSocket && clientSocket.readyState === WebSocket.OPEN) {
-                    // Send as string, not raw buffer
+                if (clientSocket.readyState === WebSocket.OPEN) {
                     clientSocket.send(JSON.stringify(message));
                 }
             } catch (error) {
-                console.error('❌ Error forwarding OpenAI message:', error);
+                console.error('❌ Error parsing OpenAI message:', error);
                 console.error('Raw data:', data.toString());
             }
         });
 
-        // Handle OpenAI connection errors
         openaiSocket.on('error', (error) => {
             console.error('❌ OpenAI WebSocket error:', error);
-
-            // Send error to client
-            if (clientSocket && clientSocket.readyState === WebSocket.OPEN) {
+            if (clientSocket.readyState === WebSocket.OPEN) {
                 clientSocket.send(JSON.stringify({
                     type: 'error',
                     error: {
@@ -89,19 +79,16 @@ wss.on('connection', (clientSocket, request) => {
             }
         });
 
-        // Handle OpenAI connection close
         openaiSocket.on('close', (code, reason) => {
             console.log('🔌 OpenAI connection closed:', code, reason.toString());
-
-            if (clientSocket && clientSocket.readyState === WebSocket.OPEN) {
+            if (clientSocket.readyState === WebSocket.OPEN) {
                 clientSocket.close(1000, 'OpenAI connection closed');
             }
         });
 
     } catch (error) {
         console.error('❌ Failed to create OpenAI connection:', error);
-
-        if (clientSocket && clientSocket.readyState === WebSocket.OPEN) {
+        if (clientSocket.readyState === WebSocket.OPEN) {
             clientSocket.send(JSON.stringify({
                 type: 'error',
                 error: {
@@ -113,51 +100,27 @@ wss.on('connection', (clientSocket, request) => {
         }
     }
 
-    // Handle client disconnection
     clientSocket.on('close', (code, reason) => {
         console.log('📱 Client disconnected:', code, reason.toString());
-
         if (openaiSocket && openaiSocket.readyState === WebSocket.OPEN) {
             openaiSocket.close();
         }
     });
 
-    // Handle client errors
     clientSocket.on('error', (error) => {
         console.error('❌ Client WebSocket error:', error);
-
         if (openaiSocket && openaiSocket.readyState === WebSocket.OPEN) {
             openaiSocket.close();
         }
     });
 });
 
-// Handle server errors
 server.on('error', (error) => {
     console.error('❌ Server error:', error);
 });
 
-// Start the server
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
     console.log(`🌐 Proxy server running on port ${PORT}`);
-    console.log(`📱 React Native should connect to: ws://localhost:${PORT}/realtime`);
-    console.log('🔑 Make sure to set your OpenAI API key in the OPENAI_API_KEY variable');
-});
-
-// Graceful shutdown
-process.on('SIGTERM', () => {
-    console.log('🛑 Shutting down server...');
-    server.close(() => {
-        console.log('✅ Server shut down gracefully');
-        process.exit(0);
-    });
-});
-
-process.on('SIGINT', () => {
-    console.log('🛑 Shutting down server...');
-    server.close(() => {
-        console.log('✅ Server shut down gracefully');
-        process.exit(0);
-    });
+    console.log(`📡 Clients should connect to: wss://real-time-api-server.onrender.com/realtime`);
 });
