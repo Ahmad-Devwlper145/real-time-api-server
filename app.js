@@ -58,14 +58,17 @@ wss.on('connection', (clientSocket, request) => {
         // Forward messages from OpenAI to client
         openaiSocket.on('message', (data) => {
             try {
+                // Ensure we're sending valid JSON string
                 const message = JSON.parse(data.toString());
                 console.log('📥 OpenAI → Client:', message.type);
 
                 if (clientSocket && clientSocket.readyState === WebSocket.OPEN) {
-                    clientSocket.send(data);
+                    // Send as string, not raw buffer
+                    clientSocket.send(JSON.stringify(message));
                 }
             } catch (error) {
                 console.error('❌ Error forwarding OpenAI message:', error);
+                console.error('Raw data:', data.toString());
             }
         });
 
